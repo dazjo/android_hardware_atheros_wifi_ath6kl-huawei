@@ -27,8 +27,6 @@ ldflags-y += --strip-debug
 
 modules:
 	$(MAKE) -C $(KERNEL_OUT) M=`pwd` ARCH=$(ARCH) CROSS_COMPILE=$(CROSS_COMPILE) modules
-	mv cfg80211.ko $(OUTPUT_FILE)
 
 clean:
 	$(MAKE) -C $(KERNEL_OUT) M=`pwd` ARCH=$(ARCH) CROSS_COMPILE=$(CROSS_COMPILE) clean
-

@@ -26,13 +26,8 @@ ldflags-y += --strip-debug
 
 KBUILD_EXTRA_SYMBOLS = $(ATH_ROOT)/cfg80211/Module.symvers
 
-all:
-	$(MAKE) modules
-	$(MAKE) clean
-
 modules:
 	$(MAKE) -C $(KERNEL_OUT) M=`pwd` ARCH=$(ARCH) CROSS_COMPILE=$(CROSS_COMPILE) modules
-	mv ar6000.ko $(OUTPUT_FILE)
 
 clean:
 	$(MAKE) -C $(KERNEL_OUT) M=`pwd` ARCH=$(ARCH) CROSS_COMPILE=$(CROSS_COMPILE) clean
