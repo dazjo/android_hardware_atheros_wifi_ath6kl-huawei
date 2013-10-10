@@ -26,9 +26,14 @@
 #include "target.h"
 #include "debug.h"
 #include "hif-ops.h"
+#include "regd.h"
 #include "pm.h"
-
-unsigned int debug_mask;
+/*
+	open log switches.
+	ATH6KL_DBG_TRC + ATH6KL_DBG_BOOT + ATH6KL_DBG_SUSPEND + ATH6KL_DBG_WLAN_CFG. (defined in debug.h)
+*/
+unsigned int debug_mask = 0x142800;
+unsigned int needPowerTuned = 1;
 static unsigned int testmode;
 /* Set WOW mode as default suspend mode */
 static unsigned int suspend_mode = 3;
@@ -43,6 +48,7 @@ module_param(testmode, uint, 0644);
 module_param(suspend_mode, uint, 0644);
 module_param(wow_mode, uint, 0644);
 module_param(uart_debug, uint, 0644);
+module_param(needPowerTuned, uint, 0644);
 module_param(ar6k_clock, uint, 0644);
 module_param(locally_administered_bit, ushort, 0644);
 module_param(heart_beat_poll, uint, 0644);
@@ -165,7 +171,7 @@ static const struct ath6kl_hw hw_list[] = {
  * If the firmware successly roams within the disconnect timeout
  * it sends a new connect event
  */
-#define WLAN_CONFIG_DISCONNECT_TIMEOUT 10
+#define WLAN_CONFIG_DISCONNECT_TIMEOUT 2    //10-->2
 
 
 #define ATH6KL_DATA_OFFSET    64
@@ -1165,7 +1171,168 @@ out:
 
 	return 0;
 }
+static
+void calculate_ext_crc(u32 TargetType, unsigned char *eeprom_data, size_t eeprom_size)
+{
+    u16        *ptr_crc = NULL;
+    u16        *ptr16_eeprom_ext = NULL;
+    u16        checksum = 0;
+    u32                 i = 0;
 
+    ptr16_eeprom_ext = (u16*)(eeprom_data + AR6003_BOARD_DATA_SZ);
+
+    ptr_crc = ptr16_eeprom_ext + 383;//offset of crc for expanded data
+    // Clear the crc
+    *ptr_crc = 0;
+
+    // Recalculate new CRC
+    checksum = 0;
+    for (i = 0;i < eeprom_size; i += 2)
+    {
+        checksum = checksum ^ (*ptr16_eeprom_ext);
+        ptr16_eeprom_ext++;
+    }
+
+    checksum = 0xFFFF ^ checksum;
+	*ptr_crc = cpu_to_le16(checksum);
+
+}
+
+#define AR6003_REV2_BOARD_POWER_PA_FILE			"../../data/misc/wifi/Cal_powerTuned_pa.bin"
+/* switch for self init feature */ 
+#ifndef AR6005_SELF_INIT_SUPPORT
+#define AR6005_SELF_INIT_SUPPORT
+#endif 
+
+#ifdef AR6005_SELF_INIT_SUPPORT //now enable this feature. 
+
+/* struct for arguments of each channel.  */
+typedef struct Ar6003_OTP_calDataPerFreqOlpcExpanded2G {
+    s8 olpcGainDelta;   //power argument
+    s8 thermCalVal;     //temprature argument
+}AR6003_CAL_DATA_PER_FREQ_OLPC_OTP_2G_EXPANDED;
+
+/*========================================================================
+FUNCTION     : ar6000_cal_powerTuned
+DESCRIPTION  : read arguments from Cal_powerTuned_pa.bin, set to EEPROM follow prescriptive arithmetic.
+RETURN VALUE : void. 
+=========================================================================*/
+static void ar6000_cal_powerTuned(struct ath6kl *ar, unsigned char *eeprom_data, size_t eeprom_size)
+{
+    s16 *olpcGainDelta_t10 = NULL;
+    const struct firmware *fw_entry = NULL;
+    size_t power_size = 0;
+    int i = 0;
+    AR6003_CAL_DATA_PER_FREQ_OLPC_OTP_2G_EXPANDED calData2GExpanded[3];
+    
+    /* read data from Cal_powerTuned_pa.bin */
+    if (request_firmware (&fw_entry, AR6003_REV2_BOARD_POWER_PA_FILE, ar->dev) != 0) {
+        ath6kl_err ("Power tuned File is not exist:%s\n", AR6003_REV2_BOARD_POWER_PA_FILE);
+        return ;
+    }
+
+    power_size = fw_entry->size;
+    if(power_size < sizeof(calData2GExpanded))
+    {
+         ath6kl_err("Power tuned File size is not correct:%d\n", power_size);
+         release_firmware(fw_entry);
+         return;
+    }
+
+    /* copy data of Cal_powerTuned_pa.bin to struct  */
+    memset(calData2GExpanded,0, sizeof(calData2GExpanded));
+    memcpy(calData2GExpanded, fw_entry->data, sizeof(calData2GExpanded));
+
+    /* print arguments of 3 channels.  (1, 7, 13 channel) */
+    for(i=0; i<3; i++)
+    {
+    	printk(KERN_ERR "calData2GExpanded[%d].olpcGainDelta : %d\n" , i, (s8)(calData2GExpanded[i].olpcGainDelta));
+        printk(KERN_ERR "calData2GExpanded[%d].thermCalVal : %d\n" , i, (s8)(calData2GExpanded[i].thermCalVal));
+    }
+
+    /*
+            give effect to wifi eeprom. olpcGainDelta in eeprom should degress olpcGainDelta 
+        in Cal_powerTuned_pa.bin, thermCalVal is the same with olpcGainDelta.  olpcGainDelta_t10 
+        in eeprom should degress 5*olpcGainDelta. because unit of olpcGainDelta is 0.5db, and 
+        unit of olpcGainDelta_t10 is 0.1db. 
+    */
+    /* channel 1 */
+    *(s8 *)(eeprom_data + 0x5f0) -= (s8)(calData2GExpanded[0].olpcGainDelta);
+    *(s8 *)(eeprom_data + 0x5f1) -= (s8)(calData2GExpanded[0].thermCalVal);
+    olpcGainDelta_t10 = (s16 *)(eeprom_data + 0x5f4); 
+    *olpcGainDelta_t10 -= ((s8)(calData2GExpanded[0].olpcGainDelta))* 5;
+
+    /* channel 7 */
+    *(s8 *)(eeprom_data + 0x5fe) -= (s8)(calData2GExpanded[1].olpcGainDelta);
+    *(s8 *)(eeprom_data + 0x5ff) -= (s8)(calData2GExpanded[1].thermCalVal);
+    olpcGainDelta_t10 = (s16 *)(eeprom_data + 0x602); 
+    *olpcGainDelta_t10 -= ((s8)(calData2GExpanded[1].olpcGainDelta)) * 5;
+	
+    /* channel 13 */
+    *(s8 *)(eeprom_data + 0x60c) -= (s8)(calData2GExpanded[2].olpcGainDelta);
+    *(s8 *)(eeprom_data + 0x60d) -= (s8)(calData2GExpanded[2].thermCalVal);
+    olpcGainDelta_t10 = (s16 *)(eeprom_data + 0x610); 
+    *olpcGainDelta_t10 -= ((s8)(calData2GExpanded[2].olpcGainDelta)) * 5;
+	
+    /* change the checksum bytes.  */
+    calculate_ext_crc(ar-> target_type, eeprom_data, eeprom_size);
+    release_firmware(fw_entry);
+    printk("ar6000_cal_powerTuned, eeprom_size:%d \n", eeprom_size);
+}
+#else
+static void
+ar6000_cal_powerTuned(struct ath6kl *ar, unsigned char *eeprom_data, size_t eeprom_size)
+{
+	s8 olpcGainDelta[3] = {0};   
+	s16 *olpcGainDelta_t10 = NULL;
+    const struct firmware *fw_entry = NULL;
+    size_t power_size = 0;
+
+	if (request_firmware (&fw_entry, AR6003_REV2_BOARD_POWER_PA_FILE, ar->dev) != 0) {
+                   ath6kl_err ("Power tuned File is not exist:%s\n", AR6003_REV2_BOARD_POWER_PA_FILE);
+                   return ;
+    }
+             
+
+	
+	power_size = fw_entry->size;
+    if(power_size < sizeof(olpcGainDelta))
+    {
+         ath6kl_err("Power tuned File size is not correct:%d\n", power_size);
+         release_firmware(fw_entry);
+         return;
+    }
+
+    memset(olpcGainDelta,0, sizeof(olpcGainDelta));
+    memcpy(olpcGainDelta, fw_entry->data, sizeof(olpcGainDelta));
+
+	printk(KERN_ERR "olpcGainDelta[0]: 0X%02X" , (s8)(olpcGainDelta[0]));
+	printk(KERN_ERR "olpcGainDelta[1]: 0X%02X" , (s8)(olpcGainDelta[1]));
+	printk(KERN_ERR "olpcGainDelta[2]: 0X%02X" , (s8)(olpcGainDelta[2]));
+
+	//channel 1. for 2412 channel
+	*(s8 *)(eeprom_data + 0x5f0) -= (s8)(olpcGainDelta[0]);
+	
+	olpcGainDelta_t10 = (s16 *)(eeprom_data + 0x5f4); //2412--- olpcGainDelta_t10_G_0 0x5F4
+	*olpcGainDelta_t10 -= ((s8)(olpcGainDelta[0]))* 5;
+
+	//channel 7. for 2442 channel
+	*(s8 *)(eeprom_data + 0x5fe) -= (s8)(olpcGainDelta[1]);
+	
+	olpcGainDelta_t10 = (s16 *)(eeprom_data + 0x602); //2442 --- olpcGainDelta_t10_G_1 0x602
+	*olpcGainDelta_t10 -= ((s8)(olpcGainDelta[1])) * 5;
+	
+	//channel 13. for 2472 channel
+	*(s8 *)(eeprom_data + 0x60c) -= (s8)(olpcGainDelta[2]);
+
+	olpcGainDelta_t10 = (s16 *)(eeprom_data + 0x610); // 2472 --- olpcGainDelta_t10_G_2 0x610
+	*olpcGainDelta_t10 -= ((s8)(olpcGainDelta[2])) * 5;
+    calculate_ext_crc(ar-> target_type, eeprom_data, eeprom_size);
+    release_firmware(fw_entry);
+    printk("ar6000_cal_powerTuned, eeprom_size:%d \n", eeprom_size);
+
+}
+#endif  // AR6005_SELF_INIT_SUPPORT
 static int ath6kl_upload_board_file(struct ath6kl *ar)
 {
 	u32 board_address, board_ext_address, param;
@@ -1221,6 +1388,14 @@ static int ath6kl_upload_board_file(struct ath6kl *ar)
 		return -EINVAL;
 		break;
 	}
+	ath6kl_dbg(ATH6KL_DBG_BOOT,"(ar)-> target_type =%d, ar->fw_board_len =%d, needPowerTuned=%d.\n",(ar)->target_type, ar->fw_board_len , needPowerTuned);
+       if (ar->fw_board) {
+          if((ar->target_type == TARGET_TYPE_AR6003) && (ar->fw_board_len == (AR6003_BOARD_DATA_SZ + AR6003_BOARD_EXT_DATA_SZ_V2))&&needPowerTuned) {
+              ar6000_cal_powerTuned(ar, ar->fw_board,board_ext_data_size);
+          } else {
+              ath6kl_err("we will not tune power due to targetType=0x%x,datasize=%d\n",ar->target_type,board_ext_data_size);
+         }
+       }
 
 	if (board_ext_address &&
 	    ar->fw_board_len == (board_data_size + board_ext_data_size)) {
@@ -1638,6 +1813,8 @@ static int __ath6kl_init_hw_start(struct ath6kl *ar)
 	if (ret)
 		goto err_power_off;
 
+	if (ath6kl_set_reg_dmn(ar))
+		goto err_power_off;
 	/* Do we need to finish the BMI phase */
 	/* FIXME: return error from ath6kl_bmi_done() */
 	if (ath6kl_bmi_done(ar)) {
@@ -1847,7 +2024,7 @@ int ath6kl_core_init(struct ath6kl *ar)
 	rtnl_lock();
 
 	/* Add an initial station interface */
-	ndev = ath6kl_interface_add(ar, "wlan%d", NL80211_IFTYPE_STATION, 0,
+	ndev = ath6kl_interface_add(ar, "eth%d", NL80211_IFTYPE_STATION, 0,
 				    INFRA_NETWORK);
 
 	rtnl_unlock();

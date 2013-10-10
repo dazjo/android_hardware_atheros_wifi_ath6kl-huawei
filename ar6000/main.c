@@ -476,6 +476,32 @@ void ath6kl_connect_ap_mode_bss(struct ath6kl_vif *vif, u16 channel)
 	netif_carrier_on(vif->ndev);
 }
 
+/*add new_sta join uevent SOFTAP=STA_JOIN */ 
+void ath6kl_uevent_new_sta(struct ath6kl *ar, const u8 *mac_addr)
+{
+        char event[64];
+        char *envp[] = { event, NULL };
+
+        memset(event, 0, sizeof(event));
+        sprintf(event, "SOFTAP=STA_JOIN eth0 wl0.1 %02x:%02x:%02x:%02x:%02x:%02x", 
+        mac_addr[0], mac_addr[1], mac_addr[2], mac_addr[3], mac_addr[4], mac_addr[5]);
+        ath6kl_err("%s(): send uevent=%s\n",__FUNCTION__, event);
+        kobject_uevent_env(&(ar->dev->kobj), KOBJ_CHANGE, envp);
+}
+
+/*add new_sta leave uevent SOFTAP=STA_LEAVE */ 
+void ath6kl_uevent_del_sta(struct ath6kl *ar, const u8 *mac_addr)
+{
+        char event[64];
+        char *envp[] = { event, NULL };
+
+        memset(event, 0, sizeof(event));
+        sprintf(event, "SOFTAP=STA_LEAVE eth0 wl0.1 %02x:%02x:%02x:%02x:%02x:%02x",
+        mac_addr[0], mac_addr[1], mac_addr[2], mac_addr[3], mac_addr[4], mac_addr[5]);
+        ath6kl_err("%s(): send uevent=%s\n",__FUNCTION__, event);
+        kobject_uevent_env(&(ar->dev->kobj), KOBJ_CHANGE, envp);
+}
+
 void ath6kl_connect_ap_mode_sta(struct ath6kl_vif *vif, u16 aid, u8 *mac_addr,
 				u8 keymgmt, u8 ucipher, u8 auth,
 				u8 assoc_req_len, u8 *assoc_info, u8 apsd_info)
@@ -547,6 +573,8 @@ void ath6kl_connect_ap_mode_sta(struct ath6kl_vif *vif, u16 aid, u8 *mac_addr,
 	sinfo.filled |= STATION_INFO_ASSOC_REQ_IES;
 
 	cfg80211_new_sta(vif->ndev, mac_addr, &sinfo, GFP_KERNEL);
+
+	ath6kl_uevent_new_sta(vif->ar, mac_addr);
 
 	netif_wake_queue(vif->ndev);
 }
@@ -1082,6 +1110,7 @@ void ath6kl_disconnect_event(struct ath6kl_vif *vif, u8 reason, u8 *bssid,
 		if (!is_broadcast_ether_addr(bssid)) {
 			/* send event to application */
 			cfg80211_del_sta(vif->ndev, bssid, GFP_KERNEL);
+			ath6kl_uevent_del_sta(vif->ar, bssid);
 		}
 
 		if (memcmp(vif->ndev->dev_addr, bssid, ETH_ALEN) == 0) {

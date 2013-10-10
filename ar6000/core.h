@@ -194,16 +194,17 @@ enum ath6kl_hw_flags {
 
 /* AR6003 3.0 definitions */
 #define AR6003_HW_2_1_1_VERSION                 0x30000582
-#define AR6003_HW_2_1_1_FW_DIR			"ath6k/AR6003/hw2.1.1"
+#define AR6003_HW_2_1_1_FW_DIR			"ath6k"
 #define AR6003_HW_2_1_1_OTP_FILE		"otp.bin"
 #define AR6003_HW_2_1_1_FIRMWARE_FILE		"athwlan.bin"
 #define AR6003_HW_2_1_1_TCMD_FIRMWARE_FILE	"athtcmd_ram.bin"
 #define AR6003_HW_2_1_1_UTF_FIRMWARE_FILE	"utf.bin"
 #define AR6003_HW_2_1_1_TESTSCRIPT_FILE	"nullTestFlow.bin"
 #define AR6003_HW_2_1_1_PATCH_FILE		"data.patch.bin"
-#define AR6003_HW_2_1_1_BOARD_DATA_FILE "ath6k/AR6003/hw2.1.1/bdata.bin"
+/* relation to system/core/init/devices.c. FIRMWARE_DIR4 (/data/misc/wifi) */
+#define AR6003_HW_2_1_1_BOARD_DATA_FILE "load/caldata.bin"
 #define AR6003_HW_2_1_1_DEFAULT_BOARD_DATA_FILE	\
-			"ath6k/AR6003/hw2.1.1/bdata.SD31.bin"
+			"ath6k/bdata.SD31.bin"
 
 /* AR6004 1.0 definitions */
 #define AR6004_HW_1_0_VERSION                 0x30000623

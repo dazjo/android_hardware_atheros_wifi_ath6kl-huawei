@@ -17,7 +17,7 @@
 #include "core.h"
 #include "debug.h"
 #include <linux/vmalloc.h>
-#define MAC_FILE "ath6k/AR6003/hw2.1.1/softmac"
+#define MAC_FILE "softmac"
 
 typedef char            A_CHAR;
 extern int android_readwrite_file(const A_CHAR *filename, A_CHAR *rbuf, const A_CHAR *wbuf, size_t length);
@@ -158,6 +158,9 @@ void ath6kl_mangle_mac_address(struct ath6kl *ar, u8 locally_administered_bit)
 		   "MAC from EEPROM %02X:%02X:%02X:%02X:%02X:%02X\n",
 		   ptr_mac[0], ptr_mac[1], ptr_mac[2],
 		   ptr_mac[3], ptr_mac[4], ptr_mac[5]);
+	printk("MAC from EEPROM %02X:%02X:%02X:%02X:%02X:%02X\n",
+		   ptr_mac[0], ptr_mac[1], ptr_mac[2],
+		   ptr_mac[3], ptr_mac[4], ptr_mac[5]);
 
 #ifdef CONFIG_MACH_PX
 	ret = ath6kl_fetch_nvmac_info(ar);
@@ -178,6 +181,12 @@ void ath6kl_mangle_mac_address(struct ath6kl *ar, u8 locally_administered_bit)
 
 	ath6kl_dbg(ATH6KL_DBG_BOOT,
 			"MAC from SoftMAC %02X:%02X:%02X:%02X:%02X:%02X\n",
+			ptr_mac[0], ptr_mac[1], ptr_mac[2],
+			ptr_mac[3], ptr_mac[4], ptr_mac[5]);
+	printk("MAC from softmac %02X:%02X:%02X:%02X:%02X:%02X\n",
+			softmac[0], softmac[1], softmac[2],
+			softmac[3], softmac[4], softmac[5]);
+	printk("MAC from ptr_mac %02X:%02X:%02X:%02X:%02X:%02X\n",
 			ptr_mac[0], ptr_mac[1], ptr_mac[2],
 			ptr_mac[3], ptr_mac[4], ptr_mac[5]);
 	vfree(ath6kl_softmac);

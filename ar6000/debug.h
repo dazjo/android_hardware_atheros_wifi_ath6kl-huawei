@@ -56,7 +56,7 @@ int ath6kl_printk(const char *level, const char *fmt, ...);
 #define ath6kl_err(fmt, ...)					\
 	ath6kl_printk(KERN_ERR, fmt, ##__VA_ARGS__)
 #define ath6kl_warn(fmt, ...)					\
-	ath6kl_printk(KERN_WARNING, fmt, ##__VA_ARGS__)
+	ath6kl_printk(KERN_ERR, fmt, ##__VA_ARGS__)
 
 #define AR_DBG_LVL_CHECK(mask)	(debug_mask & mask)
 
@@ -69,7 +69,7 @@ enum ath6kl_war {
 	({								\
 	 int rtn;							\
 	 if (debug_mask & mask)						\
-		rtn = ath6kl_printk(KERN_DEBUG, fmt, ##__VA_ARGS__);	\
+		rtn = ath6kl_printk(KERN_ERR, fmt, ##__VA_ARGS__);	\
 	 else								\
 		rtn = 0;						\
 									\

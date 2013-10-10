@@ -3,7 +3,7 @@ obj-m += ar6000.o
 
 ar6000-y += debug.o debugfs_pri.o hif.o htc.o bmi.o cfg80211.o
 ar6000-y += cfg80211_btcoex.o pm.o init.o main.o txrx.o wmi.o wmi_btcoex.o
-ar6000-y += sdio.o platform.o softmac.o wmiconfig.o testmode.o
+ar6000-y += sdio.o platform.o softmac.o wmiconfig.o regd.o testmode.o
 ar6000-y += recovery.o
 
 ccflags-y += -D__CHECK_ENDIAN__
