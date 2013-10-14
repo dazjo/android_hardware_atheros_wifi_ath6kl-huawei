@@ -13,6 +13,8 @@ ccflags-y += -DCONFIG_CFG80211_DEFAULT_PS
 ccflags-y += -DCONFIG_CFG80211_WEXT
 ccflags-y += -DCONFIG_NL80211_TESTMODE
 
+ccflags-y += -DFIX_HUAWEI_BUTCHERING
+
 ATH_ROOT = $(src)/..
 
 ccflags-y += -I$(ATH_ROOT)/include
